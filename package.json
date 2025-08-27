@@ -1,0 +1,30 @@
+{
+  "name": "@tanosshi/reddit-scraper",
+  "version": "1.0.0",
+  "description": "scrape any type of reddit content",
+  "main": "src/index.js",
+  "bin": {
+    "reddit-scraper": "src/index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "reddit"
+  ],
+  "author": "tanos",
+  "license": "ISC",
+  "type": "commonjs",
+  "files": [
+    "src/",
+    "README.md",
+    "thumbnail.png"
+  ],
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}
