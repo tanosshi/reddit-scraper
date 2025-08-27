@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "scrape any type of reddit content",
   "main": "src/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tanosshi/reddit-scraper.git"
+  },
+  "homepage": "https://github.com/tanosshi/reddit-scraper",
+  "bugs": {
+    "url": "https://github.com/tanosshi/reddit-scraper/issues"
+  },
   "bin": {
     "reddit-scraper": "src/index.js"
   },
