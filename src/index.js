@@ -43,7 +43,10 @@ async function download(redditPostUrl, options = {}) {
 
   // Prefer direct image if available
   if (imageUrl && /\.(jpg|jpeg|png|gif)$/i.test(imageUrl)) {
-    const fileName = path.join(outDir, path.basename(new URL(imageUrl).pathname));
+    const fileName = path.join(
+      outDir,
+      path.basename(new URL(imageUrl).pathname)
+    );
     const imgRes = await fetch(imageUrl);
     if (!imgRes.ok) throw new Error(`failed image request: ${imgRes.status}`);
     const buffer = Buffer.from(await imgRes.arrayBuffer());
@@ -54,7 +57,10 @@ async function download(redditPostUrl, options = {}) {
   // Fallback to reddit-hosted video
   const videoUrl = getRedditVideoUrl(post);
   if (videoUrl) {
-    const fileName = path.join(outDir, path.basename(new URL(videoUrl).pathname) || `${post.id || "video"}.mp4`);
+    const fileName = path.join(
+      outDir,
+      path.basename(new URL(videoUrl).pathname) || `${post.id || "video"}.mp4`
+    );
     const vidRes = await fetch(videoUrl);
     if (!vidRes.ok) throw new Error(`failed video request: ${vidRes.status}`);
     const buffer = Buffer.from(await vidRes.arrayBuffer());
@@ -73,11 +79,9 @@ function sanitizeForFileName(input) {
 }
 
 function formatCommentsFile(title, listing) {
-  const lines = [
-    `Comments for: ${title}`,
-    "",
-  ];
+  const lines = [`Comments for: ${title}`, ""];
   const walk = (children, depth) => {
+    // Create thread
     for (const item of children || []) {
       if (item.kind !== "t1") continue;
       const c = item.data || {};
@@ -93,7 +97,11 @@ function formatCommentsFile(title, listing) {
         }
       }
       lines.push("");
-      if (c.replies && c.replies.data && Array.isArray(c.replies.data.children)) {
+      if (
+        c.replies &&
+        c.replies.data &&
+        Array.isArray(c.replies.data.children)
+      ) {
         walk(c.replies.data.children, depth + 1);
       }
     }
@@ -116,12 +124,13 @@ function defaultHeaders() {
   return {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "application/json,text/plain,*/*",
+    Accept: "application/json,text/plain,*/*", // windows 10
   };
 }
 
 function switchSubdomain(url) {
   const u = new URL(url);
+  // Try old.reddit first as theres less js security
   if (u.hostname.startsWith("old.")) {
     u.hostname = u.hostname.replace(/^old\./, "www.");
   } else if (u.hostname.startsWith("www.")) {
@@ -155,6 +164,7 @@ async function scrape(redditPostUrl, options = {}) {
   const jsonUrl = withRawJsonParam(ensureJsonSuffix(inputUrl));
   let res = await fetch(jsonUrl, { headers: defaultHeaders() });
   if (res.status === 403) {
+    // Try alternatives
     const alt = switchSubdomain(jsonUrl);
     res = await fetch(alt, { headers: defaultHeaders() });
   }
@@ -168,12 +178,16 @@ async function scrape(redditPostUrl, options = {}) {
   const selftext = post.selftext || "";
   const imageUrl = post.url_overridden_by_dest || post.url;
   const videoUrl = getRedditVideoUrl(post);
-  const commentsListing = Array.isArray(data) && data[1]?.data?.children ? data[1].data.children : [];
+  const commentsListing =
+    Array.isArray(data) && data[1]?.data?.children ? data[1].data.children : [];
 
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
   const result = { title, selftext };
 
+  //// A little spammy download part here
+
+  // Text
   if (mode === "text" || mode === "full_media" || mode === "all") {
     const baseName = sanitizeForFileName(title) || post.id || "post";
     const textPath = path.join(outDir, `${baseName}.txt`);
@@ -192,6 +206,7 @@ async function scrape(redditPostUrl, options = {}) {
     result.textPath = textPath;
   }
 
+  // Image
   if (
     (mode === "image" || mode === "full_media" || mode === "all") &&
     imageUrl &&
@@ -210,12 +225,14 @@ async function scrape(redditPostUrl, options = {}) {
     }
   }
 
+  // Video
   if (
     (mode === "video" || mode === "full_media" || mode === "all") &&
     videoUrl
   ) {
     const baseName = sanitizeForFileName(title) || post.id || "post";
-    const vidFileName = path.basename(new URL(videoUrl).pathname) || `${baseName}.mp4`;
+    const vidFileName =
+      path.basename(new URL(videoUrl).pathname) || `${baseName}.mp4`;
     const vidPath = path.join(outDir, vidFileName);
     const vidRes = await fetch(videoUrl);
     if (vidRes.ok) {
@@ -226,6 +243,7 @@ async function scrape(redditPostUrl, options = {}) {
     }
   }
 
+  // Comments/thread
   if (mode === "comments" || mode === "all") {
     const baseName = sanitizeForFileName(title) || post.id || "post";
     const commentsPath = path.join(outDir, `${baseName}.comments.txt`);
