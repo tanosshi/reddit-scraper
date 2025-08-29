@@ -1,6 +1,6 @@
 {
   "name": "@tanosshi/reddit-scraper",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "scrape any type of reddit content",
   "main": "src/index.js",
   "repository": {
