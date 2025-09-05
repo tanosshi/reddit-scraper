@@ -18,22 +18,21 @@ npm install @tanosshi/reddit-scraper
 
 ## In a file
 
-`// $> node index.js`
-
 ```js
 const { scrape, download } = require("@tanosshi/reddit-scraper");
 
 // Only download the image file, if present.
-const imagePath = await download("https://reddit.com/r/.../comments/...", { outDir: "out" });
+const imagePath = await download("https://reddit.com/r/.../comments/...", { outDir: "out", userAgent: "..." });
 
 // Scrape post content
 const res = await scrape("https://reddit.com/r/.../comments/...", {
   outDir: "out",
-  // mode: 'video' | 'image' | 'text' | 'full_media' | 'comments' | 'all'
-  mode: "all",
+  download: true, // download: true | false
+  userAgent: "...", // userAgent: {STRING} or leave empty
+  mode: "all", // mode: 'video' | 'image' | 'text' | 'full_media' | 'comments' | 'all'
 });
 
-// res = { title, selftext, imageUrl?, imagePath?, textPath?, commentsPath? }
+// res = { title, selftext?, imageUrl?, imagePath?, textPath?, commentsPath? }
 })();
 ```
 
@@ -44,7 +43,7 @@ const res = await scrape("https://reddit.com/r/.../comments/...", {
 npx reddit-scraper <redditPostUrl>
 
 # Output to directory
-npx reddit-scraper <redditPostUrl> --out out
+npx reddit-scraper <redditPostUrl> --out './out/'
 
 # Modes (default is --image)
 npx reddit-scraper <redditPostUrl> --text
@@ -80,6 +79,8 @@ Comment files are full with threads
 #### Output Directory
 
 - `outDir`: Output folder path (created if missing)
+- `download`: Whether to download it in the first place or not (only works in .scrape())
+- `userAgent`: Use a custom user agent incase the default one is flagged
 
 #### Modes
 

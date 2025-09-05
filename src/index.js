@@ -12,12 +12,16 @@ const path = require("path");
  *
  * @param {string} redditPostUrl - A Reddit post URL (any type of reddit url)
  * @param {object} [options]
+ * @param {string} [options.userAgent] - Set your own user agent
  * @param {string} [options.outDir] - Directory to save downloads into. Defaults to current directory.
  * @returns {Promise<string|undefined>} - The downloaded file path, or undefined when nothing was downloaded.
  */
 
 async function download(redditPostUrl, options = {}) {
   const outDir = options.outDir ?? ".";
+  const set_headers = options.userAgent ?? undefined;
+
+  if (set_headers === "..." || set_headers.length < 3) set_headers = undefined;
 
   const inputUrl = String(redditPostUrl || "").trim();
   if (!inputUrl) throw new Error("A Reddit post URL is required");
@@ -25,11 +29,11 @@ async function download(redditPostUrl, options = {}) {
   const jsonUrl = withRawJsonParam(ensureJsonSuffix(inputUrl));
 
   let res = await fetch(jsonUrl, {
-    headers: defaultHeaders(),
+    headers: defaultHeaders(set_headers),
   });
   if (res.status === 403) {
     const alt = switchSubdomain(jsonUrl);
-    res = await fetch(alt, { headers: defaultHeaders() });
+    res = await fetch(alt, { headers: defaultHeaders(set_headers) });
   }
   if (!res.ok) throw new Error(`failed request: ${res.status}`);
 
@@ -41,7 +45,6 @@ async function download(redditPostUrl, options = {}) {
 
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-  // Prefer direct image if available
   if (imageUrl && /\.(jpg|jpeg|png|gif)$/i.test(imageUrl)) {
     const fileName = path.join(
       outDir,
@@ -54,7 +57,6 @@ async function download(redditPostUrl, options = {}) {
     return fileName;
   }
 
-  // Fallback to reddit-hosted video
   const videoUrl = getRedditVideoUrl(post);
   if (videoUrl) {
     const fileName = path.join(
@@ -81,7 +83,6 @@ function sanitizeForFileName(input) {
 function formatCommentsFile(title, listing) {
   const lines = [`Comments for: ${title}`, ""];
   const walk = (children, depth) => {
-    // Create thread
     for (const item of children || []) {
       if (item.kind !== "t1") continue;
       const c = item.data || {};
@@ -120,17 +121,17 @@ function withRawJsonParam(url) {
   return u.toString();
 }
 
-function defaultHeaders() {
+function defaultHeaders(set_headers) {
   return {
     "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    Accept: "application/json,text/plain,*/*", // windows 10
+      set_headers ||
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.3405.102",
+    Accept: "application/json,text/plain,*/*",
   };
 }
 
 function switchSubdomain(url) {
   const u = new URL(url);
-  // Try old.reddit first as theres less js security
   if (u.hostname.startsWith("old.")) {
     u.hostname = u.hostname.replace(/^old\./, "www.");
   } else if (u.hostname.startsWith("www.")) {
@@ -140,7 +141,6 @@ function switchSubdomain(url) {
 }
 
 function getRedditVideoUrl(post) {
-  // Prefer secure_media first, then media
   const secure = post?.secure_media?.reddit_video?.fallback_url;
   const plain = post?.media?.reddit_video?.fallback_url;
   return secure || plain || null;
@@ -151,24 +151,31 @@ function getRedditVideoUrl(post) {
  * @param {string} redditPostUrl
  * @param {object} [options]
  * @param {string} [options.outDir] - Output directory for files
+ * @param {string} [options.userAgent] - Set your own user agent
+ * @param {boolean} [options.download] - Choose whether to download in the first place or not.
  * @param {('image'|'video'|'text'|'full_media'|'comments'|'all')} [options.mode] - What to save
  * @returns {Promise<{ imagePath?: string, videoPath?: string, textPath?: string, commentsPath?: string, title: string, selftext: string, imageUrl?: string, videoUrl?: string }>}
  */
+
 async function scrape(redditPostUrl, options = {}) {
   const outDir = options.outDir ?? ".";
   const mode = options.mode ?? "image";
+  const download = options.download ?? true;
+  const set_headers = options.userAgent ?? undefined;
 
   const inputUrl = String(redditPostUrl || "").trim();
   if (!inputUrl) throw new Error("A Reddit post URL is required");
 
   const jsonUrl = withRawJsonParam(ensureJsonSuffix(inputUrl));
-  let res = await fetch(jsonUrl, { headers: defaultHeaders() });
+
+  let res = await fetch(jsonUrl, { headers: defaultHeaders(set_headers) });
+
   if (res.status === 403) {
-    // Try alternatives
-    const alt = switchSubdomain(jsonUrl);
-    res = await fetch(alt, { headers: defaultHeaders() });
+    var renewed_domain = switchSubdomain(jsonUrl);
+    res = await fetch(renewed_domain, { headers: defaultHeaders(set_headers) });
   }
-  if (!res.ok) throw new Error(`failed request: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`failed request: ${res.status} ${JSON.stringify(res)}`);
 
   const data = await res.json();
   const post = data[0]?.data?.children[0]?.data;
@@ -181,11 +188,10 @@ async function scrape(redditPostUrl, options = {}) {
   const commentsListing =
     Array.isArray(data) && data[1]?.data?.children ? data[1].data.children : [];
 
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  if (download && !fs.existsSync(outDir))
+    fs.mkdirSync(outDir, { recursive: true });
 
   const result = { title, selftext };
-
-  //// A little spammy download part here
 
   // Text
   if (mode === "text" || mode === "full_media" || mode === "all") {
@@ -199,11 +205,13 @@ async function scrape(redditPostUrl, options = {}) {
       `URL: ${url}`,
       "",
     ];
-    fs.writeFileSync(
-      textPath,
-      headerLines.join("\n") + (selftext ? selftext : "(no text body)")
-    );
-    result.textPath = textPath;
+    if (download) {
+      fs.writeFileSync(
+        textPath,
+        headerLines.join("\n") + (selftext ? selftext : "(no text body)")
+      );
+      result.textPath = textPath;
+    }
   }
 
   // Image
@@ -218,9 +226,11 @@ async function scrape(redditPostUrl, options = {}) {
     );
     const imgRes = await fetch(imageUrl);
     if (imgRes.ok) {
-      const buffer = Buffer.from(await imgRes.arrayBuffer());
-      fs.writeFileSync(imgPath, buffer);
-      result.imagePath = imgPath;
+      if (download) {
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        fs.writeFileSync(imgPath, buffer);
+        result.imagePath = imgPath;
+      }
       result.imageUrl = imageUrl;
     }
   }
@@ -236,15 +246,17 @@ async function scrape(redditPostUrl, options = {}) {
     const vidPath = path.join(outDir, vidFileName);
     const vidRes = await fetch(videoUrl);
     if (vidRes.ok) {
-      const buffer = Buffer.from(await vidRes.arrayBuffer());
-      fs.writeFileSync(vidPath, buffer);
-      result.videoPath = vidPath;
+      if (download) {
+        const buffer = Buffer.from(await vidRes.arrayBuffer());
+        fs.writeFileSync(vidPath, buffer);
+        result.videoPath = vidPath;
+      }
       result.videoUrl = videoUrl;
     }
   }
 
   // Comments/thread
-  if (mode === "comments" || mode === "all") {
+  if ((mode === "comments" || mode === "all") && download) {
     const baseName = sanitizeForFileName(title) || post.id || "post";
     const commentsPath = path.join(outDir, `${baseName}.comments.txt`);
     const text = formatCommentsFile(title, commentsListing);
@@ -315,7 +327,6 @@ if (require.main === module) {
     }
 
     try {
-      // Always use scrape for consistent metadata and JSON output
       const result = await scrape(url, { outDir, mode });
       const output = {
         title: result.title,
